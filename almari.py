@@ -3098,6 +3098,13 @@ class App(Gtk.Application):
     # ------------------------------------------------------------ startup
 
     def do_activate(self):
+        # Running `almari` again does not start a second process -- GTK hands
+        # the activation to this one instead. Without this guard that second
+        # activation built a whole second set of windows, and two identical
+        # layer surfaces sat on top of each other on the same monitor, each
+        # with its own copy of the shelf.
+        if self.areas:
+            return
         self.books = self._sorted(build_index(self.cfg["books_dir"]))
         if self.mode == "bg":
             self._load_layer_shell()

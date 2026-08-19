@@ -89,6 +89,14 @@ def on_activate(a):
         a.hide_book_card()
         check("reader has no close button", buttons_in(a.reader, []) == [])
 
+        # Running the command again activates this instance rather than
+        # starting another; it must not build a second shelf on top of the
+        # first.
+        windows = len(a.areas)
+        a.do_activate()
+        check("a second activation adds no windows", len(a.areas) == windows,
+              (windows, len(a.areas)))
+
         a.quit()
         return False
 

@@ -214,9 +214,12 @@ files are left alone; remove them once you are satisfied, along with
 `~/.local/bin/shelfwall`.
 
 If you use the quickshell integration, replace `services/Bookshelf.qml` with
-`services/Almari.qml`, rename the `bookshelf` block in `Config.qml` to
-`almari`, and re-enable it once — the shell's own copy of "enabled" does not
-carry over.
+`services/Almari.qml` and rename `bookshelf` to `almari` in two places: the
+block in `Config.qml`, and the `background.bookshelf` key in
+`~/.config/illogical-impulse/config.json` (setting `command` to `almari`
+while you are there). Renaming the saved key keeps the shell's enabled and
+wallpaper-behind settings; leaving it behind quietly starts you from the
+defaults.
 
 ## Licence
 
