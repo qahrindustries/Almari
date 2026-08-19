@@ -1,0 +1,20 @@
+{
+  "books_dir": "~/Books",
+  "display": "mixed",
+  "face_out_every": 9,
+  "scale": 1.0,
+  "sort": "author",
+  "tilt_books": true,
+  "tilt_angle": 9.0,
+  "wall_mode": "color",
+  "wallpaper_path": "",
+  "wallpaper_dim": 0.45,
+  "reader_full_width": true,
+  "reader_font": "Literata, Bookerly, Georgia, serif",
+  "reader_font_size": 13,
+  "reader_line_height": 1.55,
+  "reader_justify": true,
+  "theme_from_shell": true,
+  "layer_shell": "bottom",
+  "open_cmd": "xdg-open"
+}

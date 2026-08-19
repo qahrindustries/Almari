@@ -1,0 +1,155 @@
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _harness import Checks, load   # noqa: E402
+
+from gi.repository import GLib, Gtk
+
+sw = load()
+check = Checks()
+
+if len(sys.argv) < 2:
+    print("usage: test_reader.py <book.epub>\n"
+          "Paging exactness needs a real book to lay out.", file=sys.stderr)
+    sys.exit(2)
+
+EPUB = os.path.abspath(sys.argv[1])
+title, author, _cover, _name = sw.read_epub(EPUB)
+book = {"path": EPUB, "title": title, "author": author, "cover": None,
+        "color": [0.4, 0.2, 0.2], "size": os.path.getsize(EPUB)}
+cfg = dict(sw.DEFAULTS)
+
+
+app = Gtk.Application(application_id="dev.umar.shelfwall.test")
+
+def run(a):
+    win = Gtk.ApplicationWindow(application=a)
+    win.set_default_size(1200, 800)
+    reader = sw.EpubReaderView(cfg)
+    win.set_child(reader)
+    win.present()
+
+    def phase():
+        reader.open(book)
+        GLib.timeout_add(900, measure)
+        return False
+
+    def pump():
+        ctx = GLib.MainContext.default()
+        for _ in range(200):
+            if not ctx.pending():
+                break
+            ctx.iteration(False)
+
+    def line_top_at(offset):
+        """Buffer offset of the first character at window-y 0 for `offset`."""
+        tv, adj = reader.textview, reader.scroller.get_vadjustment()
+        adj.set_value(offset)
+        pump()
+        _, by = tv.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, 0, 0)
+        it, _ = tv.get_line_at_y(by)
+        return it.get_offset()
+
+    def last_visible(offset):
+        tv, adj = reader.textview, reader.scroller.get_vadjustment()
+        adj.set_value(offset)
+        pump()
+        page = adj.get_page_size()
+        _, by = tv.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, 0, int(page) - 1)
+        it, _ = tv.get_line_at_y(by)
+        return it.get_offset()
+
+    def measure():
+        adj = reader.scroller.get_vadjustment()
+        # pick a chapter with real scrollable length
+        for ci in range(len(reader.chapters)):
+            reader.show_chapter(ci)
+            while GLib.MainContext.default().pending():
+                GLib.MainContext.default().iteration(False)
+            if adj.get_upper() - adj.get_page_size() > adj.get_page_size() * 2:
+                break
+        span = adj.get_upper() - adj.get_page_size()
+        check("chapter is scrollable", span > 0, span)
+
+        adj.set_value(0.0)
+        seen_tops = []
+        for step in range(4):
+            before = adj.get_value()
+            bottom_line = last_visible(before)
+            adj.set_value(before)
+            reader.page(1)
+            after = adj.get_value()
+            top_line = line_top_at(after)
+            adj.set_value(after)
+            seen_tops.append((before, after, bottom_line, top_line))
+            check(f"page {step+1} advances", after > before, (before, after))
+            # The line that was cut off at the bottom must be the one now on top:
+            # that is what "carries on exactly where the screen ran out" means.
+            check(f"page {step+1} loses no line", top_line == bottom_line,
+                  (top_line, bottom_line))
+
+        # forward then back returns to a whole line, never past the start
+        adj.set_value(seen_tops[-1][1])
+        pump()
+        reader.page(-1)
+        back = adj.get_value()
+        pump()
+        check("page back moves up", back < seen_tops[-1][1], back)
+        check("page back stays in range", back >= 0)
+
+        # top edge always lands on a line boundary
+        tv = reader.textview
+        _, by = tv.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, 0, 0)
+        it, line_top = tv.get_line_at_y(by)
+        _, wy = tv.buffer_to_window_coords(Gtk.TextWindowType.WIDGET, 0, line_top)
+        check("page back lands on a whole line", abs(wy) <= 2, wy)
+
+        # full-width margins
+        reader.cfg["reader_full_width"] = True
+        reader._relayout()
+        check("full width margin is a hairline",
+              reader.textview.get_left_margin() <= 16,
+              reader.textview.get_left_margin())
+        reader.cfg["reader_full_width"] = False
+        reader._relayout()
+        check("capped measure indents",
+              reader.textview.get_left_margin() > 16,
+              reader.textview.get_left_margin())
+        reader.cfg["reader_full_width"] = True
+
+        # justification resets both ways
+        reader.cfg["reader_justify"] = False
+        reader._relayout()
+        check("justify off -> LEFT",
+              reader.tag_body.get_property("justification") == Gtk.Justification.LEFT)
+        reader.cfg["reader_justify"] = True
+        reader._relayout()
+        check("justify on -> FILL",
+              reader.tag_body.get_property("justification") == Gtk.Justification.FILL)
+
+        # chrome
+        check("find bar hidden by default", not reader.find_bar.get_visible())
+        reader.focus_search()
+        check("find bar shows on demand", reader.find_bar.get_visible())
+        reader.hide_search()
+        check("find bar hides again", not reader.find_bar.get_visible())
+        check("toc hidden by default", not reader.toc_pane.get_visible())
+        reader.toggle_toc()
+        check("toc toggles on", reader.toc_pane.get_visible())
+        reader.toggle_toc()
+        check("toc toggles off", not reader.toc_pane.get_visible())
+
+        # progress record carries the percentage the info card shows
+        reader.remember()
+        rec = sw.load_progress().get(book["path"], {})
+        check("progress records pct", "pct" in rec and "chapters" in rec, rec)
+
+        a.quit()
+        return False
+
+    GLib.timeout_add(600, phase)
+
+app.connect("activate", run)
+app.run([])
+check.done()
