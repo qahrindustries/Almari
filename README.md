@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Almari" width="128">
+  <img src="docs/logo.png" alt="Almari" width="128">
 </p>
 
 <h1 align="center">Almari</h1>
