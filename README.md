@@ -47,7 +47,7 @@ Built for Hyprland with GTK4 and `wlr-layer-shell`.
 
 ## Install
 
-Start with illogical-impulse — [install it first](https://end-4.github.io/dots-hyprland-wiki/en/i-i/01setup/)
+Start with illogical-impulse — [install it first](https://end-4.github.io/dots-hyprland-wiki/en/ii-qs/01setup/)
 if you have not — then:
 
 ```sh
