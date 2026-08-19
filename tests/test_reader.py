@@ -42,23 +42,35 @@ def run(a):
                 break
             ctx.iteration(False)
 
+    def display_line_at(window_y):
+        """Buffer offset of the wrapped line drawn at `window_y`.
+
+        Paragraph offsets are too coarse to prove anything here: a whole
+        screen can sit inside one paragraph, so two different screens would
+        report the same line.
+        """
+        tv = reader.textview
+        _, by = tv.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, 0,
+                                           int(window_y))
+        return reader._display_line_at(by).get_offset()
+
+    def next_display_offset(offset):
+        tv = reader.textview
+        it = reader.buffer.get_iter_at_offset(offset)
+        return offset if not tv.forward_display_line(it) else it.get_offset()
+
     def line_top_at(offset):
-        """Buffer offset of the first character at window-y 0 for `offset`."""
-        tv, adj = reader.textview, reader.scroller.get_vadjustment()
+        """Buffer offset of the wrapped line at the top of the screen."""
+        adj = reader.scroller.get_vadjustment()
         adj.set_value(offset)
         pump()
-        _, by = tv.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, 0, 0)
-        it, _ = tv.get_line_at_y(by)
-        return it.get_offset()
+        return display_line_at(0)
 
     def last_visible(offset):
-        tv, adj = reader.textview, reader.scroller.get_vadjustment()
+        adj = reader.scroller.get_vadjustment()
         adj.set_value(offset)
         pump()
-        page = adj.get_page_size()
-        _, by = tv.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, 0, int(page) - 1)
-        it, _ = tv.get_line_at_y(by)
-        return it.get_offset()
+        return display_line_at(int(adj.get_page_size()) - 1)
 
     def measure():
         adj = reader.scroller.get_vadjustment()
@@ -84,10 +96,15 @@ def run(a):
             adj.set_value(after)
             seen_tops.append((before, after, bottom_line, top_line))
             check(f"page {step+1} advances", after > before, (before, after))
-            # The line that was cut off at the bottom must be the one now on top:
-            # that is what "carries on exactly where the screen ran out" means.
-            check(f"page {step+1} loses no line", top_line == bottom_line,
-                  (top_line, bottom_line))
+            # Carrying on exactly where the screen ran out means one of two
+            # things, depending on where the fold fell: the line that was cut
+            # in half at the bottom is now the top line, or -- if the last
+            # line happened to end flush with the bottom edge -- the top line
+            # is the one straight after it. Anything else skips text or
+            # shows it twice.
+            allowed = (bottom_line, next_display_offset(bottom_line))
+            check(f"page {step+1} loses no line", top_line in allowed,
+                  (top_line, allowed))
 
         # forward then back returns to a whole line, never past the start
         adj.set_value(seen_tops[-1][1])
@@ -105,7 +122,11 @@ def run(a):
         pump()
         tv = reader.textview
         _, by = tv.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, 0, 0)
-        it, line_top = tv.get_line_at_y(by)
+        # Measured in wrapped display lines, not paragraphs: a paragraph can
+        # be a dozen lines tall, so paragraph alignment says nothing about
+        # whether the top of the screen cuts a line of text in half.
+        it = reader._display_line_at(by)
+        line_top = tv.get_iter_location(it).y
         _, wy = tv.buffer_to_window_coords(Gtk.TextWindowType.WIDGET, 0, line_top)
         check("page back lands on a whole line", abs(wy) <= 2, wy)
 

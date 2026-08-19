@@ -2197,6 +2197,25 @@ class EpubReaderView(Gtk.Box):
     def at_top(self):
         return self.scroller.get_vadjustment().get_value() <= 2
 
+    def _display_line_at(self, buffer_y):
+        """The iterator starting the wrapped line drawn at `buffer_y`.
+
+        `get_line_at_y` answers in paragraphs, and a paragraph is as many
+        display lines tall as it needed to wrap. Aligning to paragraphs made
+        a page turn jump back to the top of whatever paragraph straddled the
+        fold, repeating most of a screen; the fold has to be measured in the
+        lines the reader actually sees.
+        """
+        tv = self.textview
+        it, _ = tv.get_line_at_y(buffer_y)
+        while True:
+            nxt = it.copy()
+            if not tv.forward_display_line(nxt):
+                return it
+            if tv.get_iter_location(nxt).y > buffer_y:
+                return it
+            it = nxt
+
     def _snap_to_line(self, want_top, forward):
         """The scroll offset nearest `want_top` that starts on a whole line.
 
@@ -2214,8 +2233,9 @@ class EpubReaderView(Gtk.Box):
             _, by = tv.window_to_buffer_coords(
                 Gtk.TextWindowType.WIDGET, 0,
                 int(round(want_top - adj.get_value())))
-            it, line_top = tv.get_line_at_y(by)
-            line_h = tv.get_line_yrange(it)[1]
+            it = self._display_line_at(by)
+            rect = tv.get_iter_location(it)
+            line_top, line_h = rect.y, rect.height
             _, wy = tv.buffer_to_window_coords(
                 Gtk.TextWindowType.WIDGET, 0, line_top)
         except Exception:
@@ -2477,9 +2497,24 @@ class _Card(Gtk.Box):
     while still reachable from the keyboard.
     """
 
+    #: set by subclasses that put their body in a Gtk.ScrolledWindow
+    scroller = None
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_css_class("sw-card")
+
+    def fit_height(self, screen_height):
+        """Never grow past the screen the card is drawn on.
+
+        A card taller than its window is not merely ugly: the rows past the
+        bottom edge cannot be reached at all, because there is nothing to
+        scroll. Bounding the body's scroller turns the overflow into a
+        scrollbar instead.
+        """
+        if self.scroller is not None and screen_height and screen_height > 0:
+            self.scroller.set_max_content_height(
+                max(200, min(640, int(screen_height) - 140)))
 
     def _section(self, text):
         lbl = Gtk.Label(label=text, xalign=0)
@@ -2548,12 +2583,6 @@ class SettingsCard(_Card):
         self.append(scroller)
 
         self.rebuild()
-
-    def fit_height(self, window_height):
-        """Keep the card inside the screen it is drawn on."""
-        if window_height and window_height > 0:
-            self.scroller.set_max_content_height(
-                max(200, min(640, window_height - 140)))
 
     # ------------------------------------------------------------ contents
 
@@ -2788,38 +2817,104 @@ class BookInfoCard(_Card):
     worth knowing, and the per-book view override.
     """
 
+    #: the card's width, unless the screen is narrower than that
+    WIDTH = 430
+
     def __init__(self, cfg, app):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.cfg = cfg
         self.app = app
         self.book = None
+        self._want = (0, 0, 0, 0)
+        self._tick = None
         self.set_halign(Gtk.Align.START)
         self.set_valign(Gtk.Align.START)
-        self.set_size_request(430, -1)
+        self.set_size_request(self.WIDTH, -1)
 
         self.body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.body.set_margin_top(16)
         self.body.set_margin_start(18)
         self.body.set_margin_end(18)
         self.body.set_margin_bottom(16)
-        self.append(self.body)
+        self.scroller = Gtk.ScrolledWindow()
+        self.scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.scroller.set_child(self.body)
+        self.scroller.set_propagate_natural_height(True)
+        # A long path or a long title otherwise drags the card's natural
+        # width out to most of the screen. Capping it here keeps the card a
+        # card, and keeps the measurement below honest.
+        self.scroller.set_propagate_natural_width(True)
+        self.scroller.set_max_content_width(self.WIDTH)
+        self.append(self.scroller)
 
     # ------------------------------------------------------------ contents
+
+    #: breathing room kept between the card and every screen edge
+    EDGE = 12
+    #: how far the card is offset from the pointer when there is room
+    GAP = 14
 
     def show_for(self, book, x, y, W, H):
         self.book = book
         self._fill()
-        # Placed at the pointer, then pulled back inside the screen. A card
-        # that opens half off the edge is worse than one that is not quite
-        # where you clicked.
-        # Measured rather than assumed: the card's height depends on how much
-        # this particular book has to say, and guessing it put the bottom of
-        # a tall card off the screen.
-        wid = max(430, self.measure(Gtk.Orientation.HORIZONTAL, -1)[1])
-        hei = self.measure(Gtk.Orientation.VERTICAL, wid)[1]
-        self.set_margin_start(int(max(12, min(max(12, W - wid - 12), x + 14))))
-        self.set_margin_top(int(max(12, min(max(12, H - hei - 12), y - 30))))
+
+        # Shown before measuring: GTK reports a hidden widget as zero-sized,
+        # so measuring first said the card was 0px tall and the clamp below
+        # happily placed its top edge at the very bottom of the screen.
+        room_w = max(160, W - 2 * self.EDGE)
+        # The width comes from the screen, never from the card's own last
+        # measurement: feeding a measured size back into the size request
+        # ratchets it wider every time the card is opened.
+        self.fit_height(H)
+        self.set_size_request(min(self.WIDTH, room_w), -1)
         self.set_visible(True)
+
+        # Placed twice. A scrolled box full of wrapping labels does not
+        # measure to a stable size before it has been laid out -- ask it and
+        # it will happily overstate its height by 50% -- so the first
+        # placement uses that measurement, which is only ever an
+        # over-estimate and so can only err towards the middle of the
+        # screen, and `_settle` corrects it from the real allocation on the
+        # next frame.
+        self._want = (x, y, W, H)
+        self._reposition(self.measure(Gtk.Orientation.HORIZONTAL, -1)[1],
+                         self.measure(Gtk.Orientation.VERTICAL, -1)[1])
+        if self._tick is None:
+            self._tick = self.add_tick_callback(self._settle)
+
+    def _settle(self, widget, clock):
+        if not self.get_visible():
+            self._tick = None
+            return GLib.SOURCE_REMOVE
+        w, h = self.get_width(), self.get_height()
+        if w <= 1 or h <= 1:
+            return GLib.SOURCE_CONTINUE
+        self._reposition(w, h)
+        self._tick = None
+        return GLib.SOURCE_REMOVE
+
+    def _reposition(self, wid, hei):
+        x, y, W, H = self._want
+        wid = min(wid, max(1, W - 2 * self.EDGE))
+        hei = min(hei, max(1, H - 2 * self.EDGE))
+        self.set_margin_start(self._place(x, wid, W, self.GAP))
+        self.set_margin_top(self._place(y, hei, H, -30))
+
+    def _place(self, at, size, extent, offset):
+        """Where to put one edge: beside the pointer, then inside the screen.
+
+        Preferring the flipped side over a slid one keeps the card next to
+        where the click happened; sliding it would walk it along the edge,
+        far from the book it describes.
+        """
+        near = at + offset
+        far = at - offset - size
+        lo, hi = self.EDGE, extent - size - self.EDGE
+        if lo <= near <= hi:
+            return int(near)
+        if lo <= far <= hi:
+            return int(far)
+        return int(max(lo, min(max(lo, hi), near)))
 
     def _fill(self):
         child = self.body.get_first_child()

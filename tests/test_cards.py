@@ -80,10 +80,28 @@ def capture_claimers(card):
     return bad
 
 
+CONTROLS = (Gtk.Switch, Gtk.Button, Gtk.Scale, Gtk.SpinButton, Gtk.DropDown)
+
+
 def interactive(card):
-    return [w for w in walk(card)
-            if isinstance(w, (Gtk.Switch, Gtk.Button, Gtk.Scale,
-                              Gtk.SpinButton, Gtk.DropDown))]
+    """The controls the card puts on screen, not their internal parts.
+
+    A SpinButton is built out of two Buttons and a DropDown out of one more;
+    those are the widget's own business and a press aimed at the middle of
+    one may legitimately be handled by its owner.
+    """
+    out = []
+    for w in walk(card):
+        if not isinstance(w, CONTROLS):
+            continue
+        p = w.get_parent()
+        while p is not None and p is not card:
+            if isinstance(p, CONTROLS):
+                break
+            p = p.get_parent()
+        else:
+            out.append(w)
+    return out
 
 
 def hits_itself(card, widget):
@@ -96,8 +114,8 @@ def hits_itself(card, widget):
     ok, rect = widget.compute_bounds(card)
     if not ok or rect.size.width <= 0 or rect.size.height <= 0:
         return None
-    cy = rect.origin.y + rect.size.height / 2
-    if cy < 0 or cy > card.get_height():
+    if rect.origin.y < 0 or \
+            rect.origin.y + rect.size.height > card.get_height():
         return None
     picked = card.pick(rect.origin.x + rect.size.width / 2,
                        rect.origin.y + rect.size.height / 2,
@@ -151,14 +169,36 @@ def on_activate(a):
                     if hits_itself(bc, w) is False]
             check("every book card control receives its own clicks",
                   dead == [], dead)
-            ok, rect = bc.compute_bounds(root)
-            check("book card fits inside the window",
-                  ok and rect.origin.x >= 0 and rect.origin.y >= 0
-                  and rect.origin.x + rect.size.width <= root.get_width() + 1
-                  and rect.origin.y + rect.size.height <= root.get_height() + 1,
-                  (rect.origin.x, rect.origin.y, rect.size.width,
-                   rect.size.height, root.get_width(), root.get_height())
-                  if ok else None)
+            # Right-clicking near an edge must not push the card over it.
+            area = a.areas[0]
+            W, H = area.get_width(), area.get_height()
+            for name, (px, py) in (("top left", (4, 4)),
+                                   ("top right", (W - 4, 4)),
+                                   ("bottom left", (4, H - 4)),
+                                   ("bottom right", (W - 4, H - 4)),
+                                   ("dead centre", (W // 2, H // 2))):
+                a.hide_book_card()
+                a.show_book_card(a.books[0], px, py, area)
+                # The card corrects its own position on the first frame
+                # after it is laid out; wait for that rather than for a
+                # fixed number of milliseconds.
+                deadline = time.monotonic() + 3.0
+                while bc._tick is not None and time.monotonic() < deadline:
+                    pump(50)
+                check(f"book card settles at {name}", bc._tick is None)
+                ok, r = bc.compute_bounds(root)
+                inside = (ok and r.origin.x >= -1 and r.origin.y >= -1
+                          and r.origin.x + r.size.width <= W + 1
+                          and r.origin.y + r.size.height <= H + 1)
+                check(f"book card stays on screen at {name}", inside,
+                      (r.origin.x, r.origin.y, r.size.width, r.size.height,
+                       W, H) if ok else None)
+                dx = max(r.origin.x - px, px - (r.origin.x + r.size.width), 0)
+                dy = max(r.origin.y - py, py - (r.origin.y + r.size.height), 0)
+                check(f"book card opens next to the pointer at {name}",
+                      ok and max(dx, dy) <= 40,
+                      (dx, dy, r.origin.x, r.origin.y, r.size.width,
+                       r.size.height, px, py) if ok else None)
             a.hide_book_card()
 
         a.quit()
