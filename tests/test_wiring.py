@@ -101,6 +101,14 @@ def on_activate(a):
                 ch = ch.get_next_sibling()
             return found
 
+        check("the build reports a version",
+              isinstance(sw.VERSION, str) and sw.VERSION.count(".") == 2,
+              sw.VERSION)
+        check("state carries the version",
+              __import__("json").loads(a.on_ipc("state"))["version"]
+              == sw.VERSION)
+        check("ctl version answers", a.on_ipc("version") == sw.VERSION)
+
         check("the logo file is where the card looks for it",
               sw.logo_path() is not None, sw.logo_path())
         check("the logo loads", sw.logo_image(26) is not None)

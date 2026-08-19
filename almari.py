@@ -109,6 +109,7 @@ gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf, Gio, GLib, Pango, PangoCairo  # noqa
 import cairo  # noqa
 
+VERSION = "1.0.0"
 APP_ID = "dev.umar.almari"
 CACHE = Path(GLib.get_user_cache_dir()) / "almari"
 CONF = Path(GLib.get_user_config_dir()) / "almari" / "config.json"
@@ -3412,6 +3413,8 @@ class App(Gtk.Application):
 
         if cmd in ("ping", "alive"):
             return "almari"
+        if cmd == "version":
+            return VERSION
         if cmd == "state":
             return json.dumps({
                 "books": len(self.books),
@@ -3422,6 +3425,7 @@ class App(Gtk.Application):
                 "hover": self.shelves[0].hover if self.shelves else None,
                 "clicks": self.click_count,
                 "layer": "background" if self.layer_windows else "window",
+                "version": VERSION,
             })
         if cmd == "quit":
             GLib.idle_add(self.quit)
@@ -3977,6 +3981,8 @@ def main():
                     help="click-through wallpaper, no interaction at all")
     ap.add_argument("--rescan", action="store_true",
                     help="rebuild the cover/metadata cache and exit")
+    ap.add_argument("--version", action="version",
+                    version=f"almari {VERSION}")
     args = ap.parse_args()
 
     cfg = themed_config(load_config(args.dir, args.scale))

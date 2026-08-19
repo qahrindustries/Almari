@@ -176,6 +176,7 @@ almari ctl book-state tilt "Animal Farm"
 almari ctl set scale 1.4
 almari ctl get                    # the whole config, as JSON
 almari ctl state                  # what it is doing right now
+almari ctl version                # which build is on screen
 almari ctl rescan
 almari ctl quit
 ```
