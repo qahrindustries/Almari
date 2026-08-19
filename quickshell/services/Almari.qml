@@ -1,3 +1,17 @@
+// Copyright 2026 Qahr Industries
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 pragma Singleton
 pragma ComponentBehavior: Bound
 
@@ -9,19 +23,19 @@ import Quickshell.Hyprland
 import qs.modules.common
 
 /**
- * Owns the shelfwall bookshelf wallpaper.
+ * Owns the Almari bookshelf wallpaper.
  *
- * shelfwall is a separate GTK4 process because it draws its shelves with
+ * Almari is a separate GTK4 process because it draws its shelves with
  * cairo, but it is not a separate *app*: it maps a layer-shell surface on the
  * background layer, underneath this shell's own background panel, and takes
  * all of its orders from here.
  *
- * What this service does *not* do is own shelfwall's settings. It used to
+ * What this service does *not* do is own Almari's settings. It used to
  * keep its own copy of every one -- book size, sort order, reading measure,
  * font -- and push the whole set down a second after launch. Anything the
- * user changed in shelfwall's own settings card was therefore overwritten by
+ * user changed in Almari's own settings card was therefore overwritten by
  * this shell's stale copy on the next login, which is what made settings look
- * like they never stuck. shelfwall's config.json is now the only home for
+ * like they never stuck. Almari's config.json is now the only home for
  * them, and this service pushes exactly the two keys the shell alone knows:
  * which wallpaper is current, and whether the shelves should stand in front
  * of it.
@@ -29,9 +43,9 @@ import qs.modules.common
 Singleton {
     id: root
 
-    readonly property var opts: Config.options?.background?.bookshelf ?? null
+    readonly property var opts: Config.options?.background?.almari ?? null
     readonly property bool enabled: (Config.ready ?? false) && (opts?.enable ?? false)
-    readonly property string command: opts?.command ?? "shelfwall"
+    readonly property string command: opts?.command ?? "almari"
     readonly property bool wallpaperBehind: opts?.wallpaperBehind ?? false
     readonly property string wallpaperPath: Config.options?.background?.wallpaperPath ?? ""
 
@@ -102,7 +116,7 @@ Singleton {
         ctl("rescan");
     }
 
-    /** Open shelfwall's own settings card -- the one place its settings live. */
+    /** Open Almari's own settings card -- the one place its settings live. */
     function openSettings() {
         if (!root.enabled) {
             root.opts.enable = true;
@@ -177,38 +191,38 @@ Singleton {
     }
 
     GlobalShortcut {
-        name: "bookshelfToggle"
-        description: "Toggle the bookshelf wallpaper"
+        name: "almariToggle"
+        description: "Toggle the Almari bookshelf wallpaper"
         onPressed: root.toggle()
     }
     GlobalShortcut {
-        name: "bookshelfWallpaperBehind"
-        description: "Toggle the wallpaper behind the bookshelf"
+        name: "almariWallpaperBehind"
+        description: "Toggle the wallpaper behind the shelves"
         onPressed: root.toggleWallpaperBehind()
     }
     GlobalShortcut {
-        name: "bookshelfSettings"
-        description: "Open the bookshelf settings"
+        name: "almariSettings"
+        description: "Open the Almari settings"
         onPressed: root.openSettings()
     }
     GlobalShortcut {
-        name: "bookshelfReaderToggle"
-        description: "Open/close the bookshelf reader"
+        name: "almariReaderToggle"
+        description: "Open/close the Almari reader"
         onPressed: root.toggleReader()
     }
     GlobalShortcut {
-        name: "bookshelfReaderClose"
-        description: "Close the bookshelf reader"
+        name: "almariReaderClose"
+        description: "Close the Almari reader"
         onPressed: root.closeReader()
     }
     GlobalShortcut {
-        name: "bookshelfRescan"
-        description: "Rescan the bookshelf for new books"
+        name: "almariRescan"
+        description: "Rescan the Almari library for new books"
         onPressed: root.rescan()
     }
 
     IpcHandler {
-        target: "bookshelf"
+        target: "almari"
 
         function toggle(): void {
             root.toggle();
@@ -228,13 +242,13 @@ Singleton {
         function wallpaperBehind(): void {
             root.toggleWallpaperBehind();
         }
-        // shelfwall's own settings card can change this too. It says so here,
+        // Almari's own settings card can change this too. It says so here,
         // so this side does not push its stale copy back down on next login.
         function setWallpaperBehind(on: bool): void {
             if (root.opts)
                 root.opts.wallpaperBehind = on;
         }
-        // shelfwall reports its own reader state. The bar no longer moves for
+        // Almari reports its own reader state. The bar no longer moves for
         // it, but the shell still tracks whether a book is open.
         function readerOpened(): void {
             root.setReaderOpen(true);

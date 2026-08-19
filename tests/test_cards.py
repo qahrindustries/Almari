@@ -13,7 +13,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _harness import Checks, load   # noqa: E402
+from _harness import Checks, library, load   # noqa: E402
 
 from gi.repository import Gio, GLib, Gtk
 
@@ -25,8 +25,11 @@ sw.save_config_soon = lambda c, delay_ms=400: None
 sw.save_progress = lambda s: None
 
 cfg = sw.themed_config(sw.load_config())
+# The app rescans on its own once it is up, so the library has to be the
+# one in the config -- setting a.books by hand is undone a moment later.
+cfg["books_dir"] = library()
 app = sw.App(cfg, "window")
-app.set_application_id("dev.umar.shelfwall.cardtest")
+app.set_application_id("dev.umar.almari.cardtest")
 app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
 
 
@@ -58,7 +61,7 @@ def walk(widget):
 
 # Stock widgets carry capture gestures of their own (a Switch pans, a
 # ScrolledWindow kinetically drags); those are internal and well-behaved.
-# What matters is the layout boxes shelfwall builds itself, which have no
+# What matters is the layout boxes Almari builds itself, which have no
 # business intercepting anything.
 OURS = (sw._Card, Gtk.Box)
 STOCK = (Gtk.Switch, Gtk.ScrolledWindow, Gtk.Button, Gtk.SpinButton,
@@ -66,7 +69,7 @@ STOCK = (Gtk.Switch, Gtk.ScrolledWindow, Gtk.Button, Gtk.SpinButton,
 
 
 def capture_claimers(card):
-    """Controllers on shelfwall's own containers that swallow presses early."""
+    """Controllers on Almari's own containers that swallow presses early."""
     bad = []
     for w in walk(card):
         if not isinstance(w, OURS) or isinstance(w, STOCK):
@@ -93,6 +96,10 @@ def interactive(card):
     out = []
     for w in walk(card):
         if not isinstance(w, CONTROLS):
+            continue
+        # A greyed-out control -- "Cover", for a book with no cover art --
+        # is deliberately unclickable.
+        if not w.get_sensitive():
             continue
         p = w.get_parent()
         while p is not None and p is not card:

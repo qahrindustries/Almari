@@ -1,0 +1,32 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GTK4 and PyGObject
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3-gi python3-gi-cairo python3-cairo \
+            gir1.2-gtk-4.0 libgtk-4-1 xvfb
+
+      - name: Byte-compile
+        run: python3 -m compileall -q almari.py tests
+
+      # gtk4-layer-shell is not packaged on the runner. Almari says so and
+      # falls back to a plain window, which is what the suite drives anyway;
+      # the layer surface itself needs a live compositor to mean anything.
+      - name: Run the suite
+        run: xvfb-run -a ./tests/run.sh
+        env:
+          GDK_BACKEND: x11
+          GSK_RENDERER: cairo

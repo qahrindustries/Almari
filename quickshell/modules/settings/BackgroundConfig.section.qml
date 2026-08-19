@@ -1,12 +1,12 @@
-// The bookshelf section of illogical-impulse's Background settings page.
+// The Almari section of illogical-impulse's Background settings page.
 // Paste this ContentSection into modules/settings/BackgroundConfig.qml.
     ContentSection {
         icon: "auto_stories"
-        title: Translation.tr("Bookshelf wallpaper")
+        title: Translation.tr("Almari bookshelf")
 
         // Everything about how the shelf looks and reads -- book size, order,
         // spines or covers, per-book views, the reading measure and font --
-        // lives in shelfwall's own settings card, opened by double-clicking
+        // lives in Almari's own settings card, opened by double-clicking
         // the shelf or with the button below. It is kept there rather than
         // mirrored here so that one place owns it and the setting a user picks
         // survives a reboot.
@@ -16,9 +16,9 @@
                 Layout.fillWidth: false
                 buttonIcon: "shelves"
                 text: Translation.tr("Enable")
-                checked: Config.options.background.bookshelf.enable
+                checked: Config.options.background.almari.enable
                 onCheckedChanged: {
-                    Config.options.background.bookshelf.enable = checked;
+                    Config.options.background.almari.enable = checked;
                 }
             }
             Item {
@@ -26,37 +26,37 @@
             }
             DialogButton {
                 buttonText: Translation.tr("Rescan library")
-                enabled: Config.options.background.bookshelf.enable
-                onClicked: Bookshelf.rescan()
+                enabled: Config.options.background.almari.enable
+                onClicked: Almari.rescan()
             }
             DialogButton {
                 buttonText: Translation.tr("Restart")
-                enabled: Config.options.background.bookshelf.enable
-                onClicked: Bookshelf.restart()
+                enabled: Config.options.background.almari.enable
+                onClicked: Almari.restart()
             }
         }
 
         ConfigSwitch {
-            visible: Config.options.background.bookshelf.enable
+            visible: Config.options.background.almari.enable
             buttonIcon: "wallpaper"
             text: Translation.tr("Show the wallpaper behind the shelves")
-            checked: Config.options.background.bookshelf.wallpaperBehind
+            checked: Config.options.background.almari.wallpaperBehind
             onCheckedChanged: {
-                Config.options.background.bookshelf.wallpaperBehind = checked;
+                Config.options.background.almari.wallpaperBehind = checked;
             }
             StyledToolTip {
-                text: Translation.tr("Keeps the bookshelf exactly as it is and puts your wallpaper behind the shelves instead of a flat color.")
+                text: Translation.tr("Keeps the shelves exactly as they are and puts your wallpaper behind them instead of a flat color.")
             }
         }
 
         ContentSubsection {
-            visible: Config.options.background.bookshelf.enable
+            visible: Config.options.background.almari.enable
             title: Translation.tr("Everything else")
             tooltip: Translation.tr("Book size, order, spines or covers, leaning, per-book views, and the reader")
 
             DialogButton {
-                buttonText: Translation.tr("Open bookshelf settings")
-                onClicked: Bookshelf.openSettings()
+                buttonText: Translation.tr("Open Almari settings")
+                onClicked: Almari.openSettings()
             }
 
             StyledText {

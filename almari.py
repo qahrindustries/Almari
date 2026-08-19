@@ -1,19 +1,37 @@
 #!/usr/bin/env python3
-"""shelfwall - realistic epub bookshelf for Hyprland (GTK4 + layer-shell)."""
+# Copyright 2026 Qahr Industries
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Almari - a real bookshelf for your desktop background.
+
+An interactive epub library that lives on the Wayland background layer:
+the shelves are the wallpaper, and the books on them open where you left
+off. GTK4 + wlr-layer-shell, with an optional quickshell front end.
+"""
 
 import os
 import sys
 
-# `shelfwall ctl <cmd>` is a keybind target, so it short-circuits before GTK
+# `almari ctl <cmd>` is a keybind target, so it short-circuits before GTK
 # is imported at all -- it only needs a socket, and a keystroke should not pay
 # a toolkit startup to send one line.
 if len(sys.argv) > 2 and sys.argv[1] == "ctl":
     import socket as _socket
 
     def _ctl(command):
-        base = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/shelfwall-{os.getuid()}"
+        base = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/almari-{os.getuid()}"
         sig = os.environ.get("WAYLAND_DISPLAY", "wayland-0")
-        path = os.path.join(base, f"shelfwall-{sig}.sock")
+        path = os.path.join(base, f"almari-{sig}.sock")
         try:
             s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
             s.settimeout(1.0)
@@ -39,7 +57,7 @@ if len(sys.argv) > 2 and sys.argv[1] == "ctl":
                 print(reply)
             return True
         except Exception as e:
-            print(f"shelfwall: not running ({e})", file=sys.stderr)
+            print(f"almari: not running ({e})", file=sys.stderr)
             return False
 
     sys.exit(0 if _ctl(" ".join(sys.argv[2:])) else 1)
@@ -63,7 +81,7 @@ def _load_layer_shell_symbols():
             return True
         except OSError:
             continue
-    print("shelfwall: libgtk4-layer-shell not found; --mode bg will not work",
+    print("almari: libgtk4-layer-shell not found; --mode bg will not work",
           file=sys.stderr)
     return False
 
@@ -77,6 +95,7 @@ import html as html_module
 import json
 import math
 import random
+import shutil
 import subprocess
 import time
 import zipfile
@@ -90,9 +109,9 @@ gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf, Gio, GLib, Pango, PangoCairo  # noqa
 import cairo  # noqa
 
-APP_ID = "dev.umar.shelfwall"
-CACHE = Path(GLib.get_user_cache_dir()) / "shelfwall"
-CONF = Path(GLib.get_user_config_dir()) / "shelfwall" / "config.json"
+APP_ID = "dev.umar.almari"
+CACHE = Path(GLib.get_user_cache_dir()) / "almari"
+CONF = Path(GLib.get_user_config_dir()) / "almari" / "config.json"
 
 CONFIG_VERSION = 2
 
@@ -144,9 +163,30 @@ CNT = "{urn:oasis:names:tc:opendocument:xmlns:container}"
 
 # ---------------------------------------------------------------- config
 
+#: Where this program's files lived when it was called shelfwall. Kept only
+#: so that an existing install carries its library, its arrangement and its
+#: reading positions across the rename instead of starting over.
+OLD_CONF = Path(GLib.get_user_config_dir()) / "shelfwall" / "config.json"
+OLD_CACHE = Path(GLib.get_user_cache_dir()) / "shelfwall"
+
+
+def adopt_old_name():
+    """Move a shelfwall install's state to Almari's, once."""
+    try:
+        if not CONF.exists() and OLD_CONF.exists():
+            CONF.parent.mkdir(parents=True, exist_ok=True)
+            CONF.write_text(OLD_CONF.read_text())
+        if not CACHE.exists() and OLD_CACHE.is_dir():
+            shutil.copytree(OLD_CACHE, CACHE)
+    except Exception as e:
+        print("could not carry over the old shelfwall settings:", e,
+              file=sys.stderr)
+
+
 def load_config(cli_dir=None, cli_scale=None):
     cfg = dict(DEFAULTS)
     stored = None
+    adopt_old_name()
     if CONF.exists():
         for attempt in range(3):
             try:
@@ -1667,9 +1707,9 @@ def rgb_css(c, alpha=None):
 # ---------------------------------------------------------------- ipc
 
 def ipc_socket_path():
-    base = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/shelfwall-{os.getuid()}"
+    base = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/almari-{os.getuid()}"
     sig = os.environ.get("WAYLAND_DISPLAY", "wayland-0")
-    return Path(base) / f"shelfwall-{sig}.sock"
+    return Path(base) / f"almari-{sig}.sock"
 
 
 def ipc_send(command, timeout=1.0):
@@ -2234,19 +2274,22 @@ class EpubReaderView(Gtk.Box):
                 Gtk.TextWindowType.WIDGET, 0,
                 int(round(want_top - adj.get_value())))
             it = self._display_line_at(by)
-            rect = tv.get_iter_location(it)
-            line_top, line_h = rect.y, rect.height
+            line_top = tv.get_iter_location(it).y
+            if not forward and line_top < by:
+                # Reading backwards the page must still *begin* on a whole
+                # line, so a boundary that falls inside one moves down to the
+                # next line rather than showing this one's lower half at the
+                # top. The next line's own top has to be looked up: adding a
+                # character's height to this one ignores the leading between
+                # them and lands a couple of pixels short every time.
+                nxt = it.copy()
+                if tv.forward_display_line(nxt):
+                    line_top = tv.get_iter_location(nxt).y
             _, wy = tv.buffer_to_window_coords(
                 Gtk.TextWindowType.WIDGET, 0, line_top)
         except Exception:
             return want_top
-        top = adj.get_value() + wy
-        if not forward and top < want_top - 0.5:
-            # Reading backwards, the page should still begin on a whole line,
-            # so the boundary line goes to the bottom of the new screen rather
-            # than showing its lower half at the top.
-            top += line_h
-        return max(0.0, min(limit, top))
+        return max(0.0, min(limit, adj.get_value() + wy))
 
     def page(self, direction):
         """Turn a page, rolling into the next/previous chapter at the edges."""
@@ -2562,7 +2605,7 @@ class SettingsCard(_Card):
         head.set_margin_start(22)
         head.set_margin_end(14)
         head.set_margin_bottom(6)
-        title = Gtk.Label(label="Bookshelf settings", xalign=0)
+        title = Gtk.Label(label="Almari settings", xalign=0)
         title.add_css_class("sw-card-title")
         title.set_hexpand(True)
         head.append(title)
@@ -3081,7 +3124,7 @@ class App(Gtk.Application):
 
     def make_window(self, monitor=None, primary=False):
         win = Gtk.ApplicationWindow(application=self)
-        win.set_title("shelfwall")
+        win.set_title("Almari")
         shelf = Shelf(self.cfg, self.books)
         self.shelves.append(shelf)
 
@@ -3188,7 +3231,7 @@ class App(Gtk.Application):
         LS.set_layer(win, layers.get(self.cfg.get("layer_shell", "bottom"),
                                      LS.Layer.BOTTOM))
         try:
-            LS.set_namespace(win, "shelfwall")
+            LS.set_namespace(win, "almari")
         except Exception:
             pass
         for edge in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
@@ -3214,7 +3257,7 @@ class App(Gtk.Application):
         is the behaviour you would expect from something living on the desktop.
 
         Reading without focus is covered by the compositor-level binds, which
-        reach shelfwall over its control socket no matter who holds focus.
+        reach Almari over its control socket no matter who holds focus.
         """
         if not (self.LS and self.layer_windows) or self.passthrough:
             return
@@ -3255,7 +3298,7 @@ class App(Gtk.Application):
         behind = "true" if self.cfg.get("wall_mode") == "wallpaper" else "false"
         try:
             subprocess.Popen(
-                ["qs", "-c", "ii", "ipc", "call", "bookshelf",
+                ["qs", "-c", "ii", "ipc", "call", "almari",
                  "setWallpaperBehind", behind],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
@@ -3276,7 +3319,7 @@ class App(Gtk.Application):
         self._reading = reading
         try:
             subprocess.Popen(
-                ["qs", "-c", "ii", "ipc", "call", "bookshelf",
+                ["qs", "-c", "ii", "ipc", "call", "almari",
                  "readerOpened" if reading else "readerClosed"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
@@ -3313,7 +3356,7 @@ class App(Gtk.Application):
         reader_up = bool(self.reader and self.reader.get_visible())
 
         if cmd in ("ping", "alive"):
-            return "shelfwall"
+            return "almari"
         if cmd == "state":
             return json.dumps({
                 "books": len(self.books),
@@ -3866,8 +3909,8 @@ class App(Gtk.Application):
 
 def main():
     ap = argparse.ArgumentParser(
-        prog="shelfwall",
-        epilog="shelfwall ctl <command>   talk to the running instance "
+        prog="almari",
+        epilog="almari ctl <command>   talk to the running instance "
                "(toggle-reader, close-reader, open <name>, random, rescan, "
                "reload, settings, next-chapter, prev-chapter, quit)")
     ap.add_argument("--mode", choices=["bg", "window"], default="bg",

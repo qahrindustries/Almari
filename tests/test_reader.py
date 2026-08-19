@@ -2,26 +2,29 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _harness import Checks, load   # noqa: E402
+from _harness import Checks, library, load   # noqa: E402
 
 from gi.repository import GLib, Gtk
 
 sw = load()
 check = Checks()
 
-if len(sys.argv) < 2:
-    print("usage: test_reader.py <book.epub>\n"
-          "Paging exactness needs a real book to lay out.", file=sys.stderr)
-    sys.exit(2)
-
-EPUB = os.path.abspath(sys.argv[1])
+# A book from the command line if one is named, and a generated one
+# otherwise: paging exactness needs a real layout, not a real purchase.
+if len(sys.argv) > 1:
+    EPUB = os.path.abspath(sys.argv[1])
+else:
+    root = library()
+    found = sorted(os.path.join(d, f) for d, _, fs in os.walk(root)
+                   for f in fs if f.endswith(".epub"))
+    EPUB = found[0]
 title, author, _cover, _name = sw.read_epub(EPUB)
 book = {"path": EPUB, "title": title, "author": author, "cover": None,
         "color": [0.4, 0.2, 0.2], "size": os.path.getsize(EPUB)}
 cfg = dict(sw.DEFAULTS)
 
 
-app = Gtk.Application(application_id="dev.umar.shelfwall.test")
+app = Gtk.Application(application_id="dev.umar.almari.test")
 
 def run(a):
     win = Gtk.ApplicationWindow(application=a)
@@ -79,10 +82,14 @@ def run(a):
             reader.show_chapter(ci)
             while GLib.MainContext.default().pending():
                 GLib.MainContext.default().iteration(False)
-            if adj.get_upper() - adj.get_page_size() > adj.get_page_size() * 2:
+            if adj.get_upper() - adj.get_page_size() > adj.get_page_size() * 5:
                 break
         span = adj.get_upper() - adj.get_page_size()
-        check("chapter is scrollable", span > 0, span)
+        # Four page turns are measured below, and a chapter that runs out
+        # part way through rolls into the next one -- which is correct
+        # behaviour but says nothing about where a page turn lands.
+        check("chapter is long enough to page through",
+              span > adj.get_page_size() * 4, span)
 
         adj.set_value(0.0)
         seen_tops = []

@@ -10,6 +10,7 @@
   "wallpaper_path": "",
   "wallpaper_dim": 0.45,
   "reader_full_width": true,
+  "reader_width": 72,
   "reader_font": "Literata, Bookerly, Georgia, serif",
   "reader_font_size": 13,
   "reader_line_height": 1.55,

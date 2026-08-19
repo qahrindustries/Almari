@@ -2,7 +2,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _harness import Checks, load   # noqa: E402
+from _harness import Checks, library, load   # noqa: E402
 
 from gi.repository import Gdk, Gio, GLib, Gtk
 
@@ -11,10 +11,13 @@ check = Checks()
 sw.desktop_top_inset = lambda default=0.0, max_age=8.0: 0.0
 sw.save_config = lambda c: None
 cfg = sw.themed_config(sw.load_config())
+# The app rescans on its own once it is up, so the library has to be the
+# one in the config -- setting a.books by hand is undone a moment later.
+cfg["books_dir"] = library()
 app = sw.App(cfg, "window")
-# The running shelfwall already owns the real application id, so a
+# The running Almari already owns the real application id, so a
 # second instance would just wake that one and exit.
-app.set_application_id("dev.umar.shelfwall.wiringtest")
+app.set_application_id("dev.umar.almari.wiringtest")
 app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
 
 def on_activate(a):
