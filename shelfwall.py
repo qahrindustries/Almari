@@ -2757,6 +2757,8 @@ class SettingsCard(_Card):
 
     def _wall_changed(self, key):
         self.app.invalidate_shelves()
+        if key == "wall_mode":
+            self.app.note_wall_mode()
         GLib.idle_add(self.rebuild)
 
     def _sort_changed(self, key):
@@ -3136,6 +3138,24 @@ class App(Gtk.Application):
         self._tell_shell(reading=False)
         self.redraw()
 
+    def note_wall_mode(self):
+        """Tell the shell which wall the shelves are standing against.
+
+        The shell owns this one, because it is the half that knows which
+        wallpaper is current, and it pushes it back down on every login. If it
+        were not told when the setting is changed here instead, its stale copy
+        would undo the change the next time the user logged in -- which is the
+        whole class of bug this arrangement exists to avoid.
+        """
+        behind = "true" if self.cfg.get("wall_mode") == "wallpaper" else "false"
+        try:
+            subprocess.Popen(
+                ["qs", "-c", "ii", "ipc", "call", "bookshelf",
+                 "setWallpaperBehind", behind],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
     def _tell_shell(self, reading):
         """Let illogical-impulse know whether a book is open.
 
@@ -3318,6 +3338,8 @@ class App(Gtk.Application):
 
         self.cfg[key] = value
         save_config(self.cfg)
+        if key == "wall_mode":
+            self.note_wall_mode()
         if key == "theme_from_shell":
             self.cfg.update(themed_config(self.cfg))
         if key == "books_dir":

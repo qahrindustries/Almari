@@ -228,6 +228,12 @@ Singleton {
         function wallpaperBehind(): void {
             root.toggleWallpaperBehind();
         }
+        // shelfwall's own settings card can change this too. It says so here,
+        // so this side does not push its stale copy back down on next login.
+        function setWallpaperBehind(on: bool): void {
+            if (root.opts)
+                root.opts.wallpaperBehind = on;
+        }
         // shelfwall reports its own reader state. The bar no longer moves for
         // it, but the shell still tracks whether a book is open.
         function readerOpened(): void {
