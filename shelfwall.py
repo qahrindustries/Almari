@@ -2466,21 +2466,20 @@ def human_ago(stamp):
 class _Card(Gtk.Box):
     """Shared behaviour for the floating cards.
 
-    Both cards sit over a scrim that closes them when it is clicked, and a
-    plain box does not consume the clicks that land on its own padding -- so
-    without claiming them here, clicking the card's own background dismissed
-    the card.
+    Both cards sit over a scrim that closes them when it is clicked. The
+    scrim is a *sibling* overlay child underneath the card, and GTK routes a
+    press to the topmost widget under the pointer and then up its ancestors
+    only -- never sideways to a sibling. So a press anywhere on the card,
+    padding included, cannot reach the scrim, and the card needs no gesture
+    of its own to defend itself. It must not have one: a claiming gesture in
+    the capture phase takes the press before it reaches the switch, slider or
+    button the user aimed at, which leaves every control dead to the mouse
+    while still reachable from the keyboard.
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_css_class("sw-card")
-        claim = Gtk.GestureClick()
-        claim.set_button(0)
-        claim.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        claim.connect("pressed", lambda g, *a: g.set_state(
-            Gtk.EventSequenceState.CLAIMED))
-        self.add_controller(claim)
 
     def _section(self, text):
         lbl = Gtk.Label(label=text, xalign=0)
@@ -2545,9 +2544,16 @@ class SettingsCard(_Card):
         scroller.set_child(self.body)
         scroller.set_propagate_natural_height(True)
         scroller.set_max_content_height(640)
+        self.scroller = scroller
         self.append(scroller)
 
         self.rebuild()
+
+    def fit_height(self, window_height):
+        """Keep the card inside the screen it is drawn on."""
+        if window_height and window_height > 0:
+            self.scroller.set_max_content_height(
+                max(200, min(640, window_height - 140)))
 
     # ------------------------------------------------------------ contents
 
@@ -2806,9 +2812,13 @@ class BookInfoCard(_Card):
         # Placed at the pointer, then pulled back inside the screen. A card
         # that opens half off the edge is worse than one that is not quite
         # where you clicked.
-        wid, hei = 430, 340
-        self.set_margin_start(int(max(12, min(W - wid - 12, x + 14))))
-        self.set_margin_top(int(max(12, min(H - hei - 12, y - 30))))
+        # Measured rather than assumed: the card's height depends on how much
+        # this particular book has to say, and guessing it put the bottom of
+        # a tall card off the screen.
+        wid = max(430, self.measure(Gtk.Orientation.HORIZONTAL, -1)[1])
+        hei = self.measure(Gtk.Orientation.VERTICAL, wid)[1]
+        self.set_margin_start(int(max(12, min(max(12, W - wid - 12), x + 14))))
+        self.set_margin_top(int(max(12, min(max(12, H - hei - 12), y - 30))))
         self.set_visible(True)
 
     def _fill(self):
@@ -3367,6 +3377,12 @@ class App(Gtk.Application):
         # and from the book cards, and a card showing stale values is worse
         # than one that takes a moment to appear.
         self.settings_card.rebuild()
+        # The card scrolls, but only if it knows how tall it is allowed to
+        # be. On a short screen an unbounded card overflows its own window
+        # and the rows past the bottom edge cannot be reached at all.
+        root = self.settings_card.get_root()
+        if root is not None:
+            self.settings_card.fit_height(root.get_height())
         self.settings_card.set_visible(True)
         self._sync_scrim()
 

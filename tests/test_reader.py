@@ -98,7 +98,11 @@ def run(a):
         check("page back moves up", back < seen_tops[-1][1], back)
         check("page back stays in range", back >= 0)
 
-        # top edge always lands on a line boundary
+        # top edge always lands on a line boundary. The adjustment is set
+        # again first: window coordinates only follow the adjustment once the
+        # scrolled window has been through a layout pass.
+        adj.set_value(back)
+        pump()
         tv = reader.textview
         _, by = tv.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, 0, 0)
         it, line_top = tv.get_line_at_y(by)
