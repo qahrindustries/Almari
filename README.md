@@ -12,12 +12,20 @@ it. It is a wallpaper you can read.
 *almari* (الماری / अलमारी) — the cupboard or bookcase that stands against the
 wall of a room.
 
-Built for Hyprland with GTK4 and `wlr-layer-shell`. It integrates with
-[illogical-impulse](https://github.com/end-4/dots-hyprland) / quickshell, but
-runs perfectly well on its own.
+Built for Hyprland with GTK4 and `wlr-layer-shell`.
+
+> **Almari is recommended only alongside [end-4's illogical-impulse](https://github.com/end-4/dots-hyprland).**
+> That is the setup it is built for and the only one it is tested on: the
+> shell starts and stops it, gives it global shortcuts and a page in the
+> settings app, steps its own wallpaper and panel aside for the shelf, and
+> hands it the current wallpaper and colour palette. Almari will run under
+> plain Hyprland, but you will be wiring up autostart, keybinds and theming
+> by hand, and nothing outside illogical-impulse is tested.
 
 [![tests](https://github.com/qahrindustries/Almari/actions/workflows/tests.yml/badge.svg)](https://github.com/qahrindustries/Almari/actions/workflows/tests.yml)
 [![licence: Apache 2.0](https://img.shields.io/badge/licence-Apache%202.0-blue.svg)](LICENSE)
+
+**[Installation and usage guide →](https://qahrindustries.github.io/Almari/)**
 
 ![Shelves in front of the wallpaper](docs/shelf-wallpaper.jpg)
 
@@ -38,6 +46,9 @@ runs perfectly well on its own.
   a bookshelf when nothing is covering it.
 
 ## Install
+
+Start with illogical-impulse — [install it first](https://end-4.github.io/dots-hyprland-wiki/en/i-i/01setup/)
+if you have not — then:
 
 ```sh
 git clone https://github.com/qahrindustries/Almari
