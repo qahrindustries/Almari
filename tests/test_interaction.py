@@ -176,9 +176,16 @@ check("settings card builds in every permutation", built == 8, built)
 
 info = sw.BookInfoCard(dict(sw.DEFAULTS), stub)
 b0 = mkbooks(1)[0]
-info.show_for(b0, 1500, 850, 1600, 900)   # near the corner: must be pulled back in
-check("info card stays on screen",
-      info.get_margin_start() + 430 <= 1600 and info.get_margin_top() + 340 <= 900,
+# Placed near a corner, and then in one, purely to prove show_for survives
+# both -- where it actually lands is not assertable here. This card has no
+# window, so it is never laid out, and an unlaid-out scrolled box of
+# wrapping labels does not measure to a stable size: ask it twice and it
+# answers 545 and then 1486. Whether the card stays on screen is checked in
+# test_cards.py, at five pointer positions inside a real window, against
+# the allocation the card actually receives.
+info.show_for(b0, 1500, 850, 1600, 900)
+check("info card places itself near a corner",
+      info.get_margin_start() >= 12 and info.get_margin_top() >= 12,
       (info.get_margin_start(), info.get_margin_top()))
 b0["cover"] = "/tmp/x.png"
 info.show_for(b0, 10, 10, 1600, 900)
