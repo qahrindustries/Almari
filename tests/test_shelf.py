@@ -52,25 +52,58 @@ missed = [it["b"]["path"] for it in shelf._items
           if shelf.at(it["x"] + it["w"] / 2, it["y"] + it["h"] / 2) is not it["b"]]
 check("all books hit-testable", not missed, missed)
 
-# tilted book: centre of the rotated quad must hit, and it must not overlap
-tilted = [it for it in shelf._items if it.get("deg", 0)]
-check("last book leans", len(tilted) >= 1, [round(it.get("deg",0),1) for it in shelf._items])
-for it in tilted:
+# a leaning book rests on a neighbour: it never leans into open air, and the
+# edge it leans on comes to rest flush against that neighbour, not inside it.
+def fwd(it, px, py):
+    """Where a point of the upright book actually lands once it has leaned."""
     a = math.radians(it["deg"])
-    cx, cy = it["x"] + it["w"], it["y_base"]
-    # top-left corner of the book after the lean
-    dx, dy = it["x"] - cx, it["y"] - cy
-    tx = cx + dx * math.cos(a) - dy * math.sin(a)
-    check("lean moves top rightwards", tx > it["x"], (tx, it["x"]))
-    check("lean hit at rotated centre",
-          shelf.at(cx + (dx/2) * math.cos(a) - (dy/2) * math.sin(a),
-                   cy + (dx/2) * math.sin(a) + (dy/2) * math.cos(a)) is it["b"])
-    # nothing to the left may be swept through
-    row = [o for o in shelf._items if o["row"] == it["row"] and o is not it]
-    if row:
-        left = max(row, key=lambda o: o["x"])
-        check("lean clears left neighbour", tx >= left["x"] + left["w"] - 1,
-              (tx, left["x"] + left["w"]))
+    cx = it["x"] if it["deg"] < 0 else it["x"] + it["w"]
+    cy = it["y_base"]
+    dx, dy = px - cx, py - cy
+    return (cx + dx * math.cos(a) - dy * math.sin(a) + it["shift"],
+            cy + dx * math.sin(a) + dy * math.cos(a))
+
+def row_of(it):
+    return sorted((o for o in shelf._items if o["row"] == it["row"]),
+                  key=lambda o: o["x"])
+
+tilted = [it for it in shelf._items if it.get("deg", 0)]
+check("last book on a part-filled shelf leans", len(tilted) >= 1,
+      [round(i.get("deg", 0), 1) for i in shelf._items])
+
+for it in tilted:
+    row = row_of(it)
+    k = row.index(it)
+    left = row[k - 1] if k > 0 else None
+    right = row[k + 1] if k + 1 < len(row) else None
+
+    if it["deg"] < 0:
+        check("leans left only with a book to rest on", left is not None)
+        check("leans left only with nothing on its right", right is None)
+        # top-left edge lands flush on the neighbour, never inside it
+        tx, _ = fwd(it, it["x"], it["y"])
+        check("left lean rests flush against the neighbour",
+              abs(tx - it["x"]) < 0.6, (tx, it["x"]))
+        check("left lean clears the neighbour",
+              tx >= left["x"] + left["w"] - 0.6, (tx, left["x"] + left["w"]))
+        # the base slides out into the empty end of the shelf
+        bx, _ = fwd(it, it["x"], it["y_base"])
+        check("left lean slides its base into the gap", bx > it["x"] + 1,
+              (bx, it["x"]))
+    else:
+        check("leans right only onto something", right is not None)
+        tx, _ = fwd(it, it["x"] + it["w"], it["y"])
+        check("right lean rests flush against the neighbour",
+              abs(tx - (it["x"] + it["w"])) < 0.6, (tx, it["x"] + it["w"]))
+        bx, _ = fwd(it, it["x"], it["y_base"])
+        check("right lean clears the book on its left",
+              left is None or bx >= left["x"] + left["w"] - 0.6,
+              (bx, left["x"] + left["w"] if left else None))
+
+    # the leaned book is still pickable at the middle of where it now sits
+    mx, my = fwd(it, it["x"] + it["w"] / 2, it["y"] + it["h"] / 2)
+    check("leaning book is hit-testable where it sits",
+          shelf.at(mx, my) is it["b"], it["b"]["title"])
 
 # tilt off => nothing leans
 cfg["tilt_books"] = False
@@ -82,12 +115,23 @@ cfg["tilt_books"] = True
 cfg["book_states"] = {"/b/4.epub": "tilt"}
 shelf.invalidate(); shelf.top_inset = 0.0; shelf._ensure(1920, 1080)
 it4 = shelf._index["/b/4.epub"]
-check("per-book tilt applied", it4["deg"] > 0, it4["deg"])
-nxt = [o for o in shelf._items if o["row"] == it4["row"] and o["x"] > it4["x"]]
-if nxt:
-    right = min(nxt, key=lambda o: o["x"])
-    sweep = it4["x"] + it4["w"] + it4["h"] * math.sin(math.radians(it4["deg"]))
-    check("mid-shelf tilt reserves its sweep", sweep <= right["x"] + 1, (sweep, right["x"]))
+check("per-book tilt applied", it4["deg"] != 0, it4["deg"])
+row4 = row_of(it4)
+k4 = row4.index(it4)
+if k4 + 1 < len(row4):
+    right = row4[k4 + 1]
+    check("mid-shelf tilt leans onto the book at its right", it4["deg"] > 0,
+          it4["deg"])
+    # leaning right, the book's own right edge is where it comes to rest, and
+    # the reserved room is behind it, so the book to its right is untouched
+    tx, _ = fwd(it4, it4["x"] + it4["w"], it4["y"])
+    check("mid-shelf tilt does not reach its right neighbour",
+          tx <= right["x"] + 0.6, (tx, right["x"]))
+    bx, _ = fwd(it4, it4["x"], it4["y_base"])
+    left4 = row4[k4 - 1] if k4 > 0 else None
+    check("mid-shelf tilt does not reach its left neighbour",
+          left4 is None or bx >= left4["x"] + left4["w"] - 0.6,
+          (bx, left4["x"] + left4["w"] if left4 else None))
 
 # per-book cover state
 cfg["book_states"] = {"/b/2.epub": "spine"}

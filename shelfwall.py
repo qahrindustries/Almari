@@ -928,6 +928,19 @@ class Shelf:
         every = int(self.cfg.get("face_out_every", 0) or 0)
         return "face" if (every and idx % every == 0) else "spine"
 
+    @staticmethod
+    def _lean_fit(h, room, tilt_max):
+        """The most a book of height h can lean with `room` beside it."""
+        if room <= 0 or h <= 0:
+            return 0.0
+        return min(tilt_max, math.degrees(
+            math.asin(max(0.0, min(1.0, room / h)))))
+
+    @staticmethod
+    def _pivot(it):
+        """The bottom corner a leaning book turns on: the one still on the plank."""
+        return ((it["x"] if it["deg"] < 0 else it["x"] + it["w"]), it["y_base"])
+
     def _tilt_deg(self):
         if not self.cfg.get("tilt_books", True):
             return 0.0
@@ -1012,11 +1025,13 @@ class Shelf:
             bh = maxh * rnd.uniform(0.74, 1.0)
             kind = self._kind_for(b, idx)
             w = bh * 0.66 if kind == "face" else th
-            # A book asked to lean is given the width it sweeps as it tips, so
-            # it tilts into room of its own rather than through its neighbour.
-            deg = tilt_max if kind == "tilt" else 0.0
-            sizes.append({"w": w, "h": bh, "kind": kind, "deg": deg,
-                          "advance": w + bh * math.sin(math.radians(deg))})
+            # A book asked to lean is given the width its base slides as it
+            # tips. Which side that room ends up on is decided at placement,
+            # once it is known what the book has to lean against.
+            sweep = (bh * math.sin(math.radians(tilt_max))
+                     if kind == "tilt" else 0.0)
+            sizes.append({"w": w, "h": bh, "kind": kind, "sweep": sweep,
+                          "advance": w + sweep})
 
         spacing = 1.2 * s
         span = avail - 8 * s
@@ -1070,24 +1085,35 @@ class Shelf:
 
             gap = x1 - x
             last = len(row_items) - 1
-            for k, (bi, b, bx, sz) in enumerate(row_items):
-                deg = sz["deg"]
-                if (deg == 0.0 and k == last and tilt_max > 0.0
-                        and sz["kind"] == "spine" and gap > 14 * s):
-                    # Tips into the empty end of the shelf, pivoting on the
-                    # bottom corner that stays on the plank, and never further
-                    # than the gap can take. Leaning the other way -- which is
-                    # what this used to do -- swings the board straight through
-                    # the book standing on its left.
-                    room = min(gap - 8 * s, sz["h"])
-                    deg = min(tilt_max, math.degrees(
-                        math.asin(max(0.0, min(1.0, room / sz["h"])))))
+            for k, (bi, b, slot_x, sz) in enumerate(row_items):
+                # A book only ever leans onto something that can hold it up: a
+                # book beside it, or the case wall. Leaning into open air is
+                # what a book does on its way to lying flat, not a pose it
+                # holds, so a book with nothing to rest on stands upright.
+                deg, box_x = 0.0, slot_x
+                leans_left = tilt_max > 0.0 and k > 0 and gap > 14 * s
+                if sz["kind"] == "tilt" and tilt_max > 0.0 and k < last:
+                    # Something stands to its right, so it tips that way and
+                    # rests against it. Its base slides left, into the room
+                    # reserved ahead of it.
+                    deg = tilt_max
+                    box_x = slot_x + sz["sweep"]
+                elif sz["kind"] == "tilt" and leans_left:
+                    deg = -self._lean_fit(sz["h"], gap - 8 * s, tilt_max)
+                elif (k == last and sz["kind"] == "spine" and leans_left):
+                    # The last book on a part-filled shelf: nothing to its
+                    # right, so it tips left onto its neighbour, its base
+                    # sliding out into the gap.
+                    deg = -self._lean_fit(sz["h"], gap - 8 * s, tilt_max)
                 self._items.append({
-                    "b": b, "x": bx, "y": y_base - sz["h"],
+                    "b": b, "x": box_x, "y": y_base - sz["h"],
                     "w": sz["w"], "h": sz["h"],
                     "kind": "face" if sz["kind"] == "face" else "spine",
-                    "deg": deg, "y_base": y_base, "s": s,
-                    "row": r, "index": bi,
+                    "deg": deg,
+                    # How far the base slides so the leaning edge comes to rest
+                    # flush against the neighbour instead of inside it.
+                    "shift": -sz["h"] * math.sin(math.radians(deg)),
+                    "y_base": y_base, "s": s, "row": r, "index": bi,
                 })
 
             wood_plank(cr, 0, y_base, W, plank, wood, r * 97)
@@ -1162,9 +1188,9 @@ class Shelf:
         pad = self._pad
         # A leaning book reaches past its upright box; padding the rectangle by
         # the sweep keeps the hover repaint from leaving a smear behind it.
-        sweep = it["h"] * math.sin(math.radians(it.get("deg", 0.0)))
-        return (it["x"] - pad, it["y"] - pad,
-                it["w"] + pad * 2 + sweep, it["h"] + pad * 2)
+        sweep = abs(it["h"] * math.sin(math.radians(it.get("deg", 0.0))))
+        return (it["x"] - pad - sweep, it["y"] - pad,
+                it["w"] + pad * 2 + sweep * 2, it["h"] + pad * 2)
 
     def animate_step(self):
         """Advance the hover animation; returns the rectangle to repaint."""
@@ -1261,8 +1287,11 @@ class Shelf:
             deg = it.get("deg", 0.0)
             cr.save()
             if deg:
-                # Pivots on the bottom corner that stays on the plank.
-                px, py = it["x"] + it["w"], it["y_base"]
+                # Turn on the bottom corner still touching the plank, then
+                # slide the base along it so the top edge comes to rest
+                # against the neighbour rather than passing through it.
+                px, py = self._pivot(it)
+                cr.translate(it["shift"], 0)
                 cr.translate(px, py)
                 cr.rotate(math.radians(deg))
                 cr.translate(-px, -py)
@@ -1300,10 +1329,10 @@ class Shelf:
             deg = it.get("deg", 0.0)
             qx, qy = px, py
             if deg:
-                # Undo the lean, then test the book's own upright box.
+                # Undo the slide and the lean, then test the upright box.
                 a = math.radians(deg)
-                cx, cy = x + w, it["y_base"]
-                dx, dy = px - cx, py - cy
+                cx, cy = self._pivot(it)
+                dx, dy = px - it["shift"] - cx, py - cy
                 qx = cx + dx * math.cos(a) + dy * math.sin(a)
                 qy = cy - dx * math.sin(a) + dy * math.cos(a)
             if x <= qx <= x + w and y <= qy <= y + h:

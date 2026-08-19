@@ -11,7 +11,7 @@ runs perfectly well on its own.
 
 ![Shelves in front of the wallpaper](docs/shelf-wallpaper.jpg)
 
-![Spines, with the last book on each shelf leaning into the gap](docs/shelf-spines.jpg)
+![Spines, with the last book on each shelf leaning back onto its neighbour](docs/shelf-spines.jpg)
 
 ## What it does
 
@@ -19,7 +19,8 @@ runs perfectly well on its own.
   a book. Cover art, title, author and spine colour are taken from the file —
   spine colour from the cover, thickness from the file size.
 - **Draws a real bookcase.** Planks, uprights, a top beam, shadows under each
-  shelf, and books that lean into the gap at the end of a row.
+  shelf, and a last book on a part-filled shelf that leans back onto its
+  neighbour with its base out in the gap, the way a real one does.
 - **Opens books in place.** Clicking a book turns the wallpaper into a reader:
   chapters, a table of contents, search, remembered position and a progress
   bar. No separate window, no application to alt-tab to.
@@ -95,9 +96,12 @@ Right-clicking a book lets that one book ignore the shelf-wide display mode:
 - **Auto** — follow the shelf setting
 - **Cover** — stand face out
 - **Spine** — stand spine out
-- **Tilted** — lean, wherever it happens to sit
+- **Tilted** — lean
 
-The choice is saved, so it survives a restart.
+A book only ever leans onto something that can hold it up: the book beside it,
+or the case wall. One with nothing to rest against stands upright, because
+leaning into open air is what a book does on its way to lying flat, not a pose
+it holds. The choice is saved, so it survives a restart.
 
 ### The wall behind the shelves
 
@@ -120,7 +124,7 @@ written straight to `~/.config/shelfwall/config.json`.
 | `book_order` | The dragged arrangement, as a list of paths |
 | `book_states` | Per-book view overrides, keyed by path |
 | `tilt_books` | Whether books lean at all |
-| `tilt_angle` | How far, in degrees. Clamped to the gap that is actually there |
+| `tilt_angle` | How far, in degrees. Clamped to the room actually beside the book |
 | `wall_mode` | `color` or `wallpaper` |
 | `wallpaper_path`, `wallpaper_dim` | The picture, and how far it is darkened |
 | `reader_full_width` | Full-bleed text, or a capped measure |
