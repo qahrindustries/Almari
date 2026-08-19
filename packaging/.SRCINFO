@@ -1,0 +1,17 @@
+pkgbase = almari
+	pkgdesc = An interactive epub bookshelf drawn on the Wayland background layer
+	pkgver = 1.0.2
+	pkgrel = 1
+	url = https://github.com/qahrindustries/Almari
+	arch = any
+	license = Apache-2.0
+	depends = python
+	depends = python-gobject
+	depends = python-cairo
+	depends = gtk4
+	depends = gtk4-layer-shell
+	optdepends = quickshell: shell integration, and the settings page under illogical-impulse
+	source = almari-1.0.2.tar.gz::https://github.com/qahrindustries/Almari/archive/refs/tags/v1.0.2.tar.gz
+	sha256sums = 7dc63019830b6093259ec192711892089c89e690c9368a108fec636015259663
+
+pkgname = almari

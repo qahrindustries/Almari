@@ -1,0 +1,42 @@
+# Maintainer: Qahr Industries <pakistanunfolded.official@gmail.com>
+pkgname=almari
+pkgver=1.0.2
+pkgrel=1
+pkgdesc="An interactive epub bookshelf drawn on the Wayland background layer"
+arch=('any')
+url="https://github.com/qahrindustries/Almari"
+license=('Apache-2.0')
+depends=('python' 'python-gobject' 'python-cairo' 'gtk4' 'gtk4-layer-shell')
+optdepends=('quickshell: shell integration, and the settings page under illogical-impulse')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('7dc63019830b6093259ec192711892089c89e690c9368a108fec636015259663')
+
+package() {
+    cd "$srcdir/Almari-$pkgver"
+
+    install -Dm755 almari.py "$pkgdir/usr/bin/almari"
+
+    # The settings card looks for its mark in the XDG data dirs.
+    install -Dm644 assets/logo.png "$pkgdir/usr/share/$pkgname/logo.png"
+    install -Dm644 packaging/almari.desktop \
+        "$pkgdir/usr/share/applications/$pkgname.desktop"
+    install -Dm644 packaging/almari-256.png \
+        "$pkgdir/usr/share/icons/hicolor/256x256/apps/$pkgname.png"
+
+    # The quickshell integration is copied by hand into the user's own shell
+    # config, so it ships as data rather than being installed anywhere live.
+    install -Dm644 quickshell/services/Almari.qml \
+        "$pkgdir/usr/share/$pkgname/quickshell/services/Almari.qml"
+    install -Dm644 quickshell/modules/common/Config.options.qml \
+        "$pkgdir/usr/share/$pkgname/quickshell/modules/common/Config.options.qml"
+    install -Dm644 quickshell/modules/settings/BackgroundConfig.section.qml \
+        "$pkgdir/usr/share/$pkgname/quickshell/modules/settings/BackgroundConfig.section.qml"
+    install -Dm644 packaging/keybinds.example.lua \
+        "$pkgdir/usr/share/$pkgname/keybinds.example.lua"
+    install -Dm644 config.example.json \
+        "$pkgdir/usr/share/$pkgname/config.example.json"
+
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 NOTICE "$pkgdir/usr/share/licenses/$pkgname/NOTICE"
+}
