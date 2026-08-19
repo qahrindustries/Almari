@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Almari
+GenericName=Bookshelf wallpaper
+Comment=An epub library that stands on your desktop background
+Exec=almari --mode bg
+Icon=almari
+Terminal=false
+Categories=Office;Viewer;Literature;
+Keywords=epub;ebook;book;reader;library;bookshelf;wallpaper;
+StartupNotify=false

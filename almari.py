@@ -2526,6 +2526,47 @@ def human_ago(stamp):
     return f"{v} year{'s' if v != 1 else ''} ago"
 
 
+def logo_path():
+    """The mark, from a checkout or from an install. None if neither."""
+    here = Path(__file__).resolve().parent / "assets" / "logo.png"
+    if here.exists():
+        return here
+    for base in [GLib.get_user_data_dir()] + list(GLib.get_system_data_dirs()):
+        p = Path(base) / "almari" / "logo.png"
+        if p.exists():
+            return p
+    return None
+
+
+#: size -> Gdk.Texture, or None when the file could not be read at all
+_LOGO_CACHE = {}
+
+
+def logo_image(size):
+    """A Gtk.Image of the mark at `size` px, or None if it is not installed.
+
+    Missing branding is not worth an error dialog or a broken-image icon:
+    the card reads perfectly well without it, so the caller just leaves that
+    corner of the row empty.
+    """
+    if size not in _LOGO_CACHE:
+        texture, path = None, logo_path()
+        if path is not None:
+            try:
+                texture = Gdk.Texture.new_for_pixbuf(
+                    GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                        str(path), size, size, True))
+            except Exception:
+                texture = None
+        _LOGO_CACHE[size] = texture
+    texture = _LOGO_CACHE[size]
+    if texture is None:
+        return None
+    img = Gtk.Image.new_from_paintable(texture)
+    img.set_pixel_size(size)
+    return img
+
+
 class _Card(Gtk.Box):
     """Shared behaviour for the floating cards.
 
@@ -2600,11 +2641,17 @@ class SettingsCard(_Card):
         self.set_valign(Gtk.Align.CENTER)
         self.set_size_request(580, -1)
 
-        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         head.set_margin_top(16)
         head.set_margin_start(22)
         head.set_margin_end(14)
         head.set_margin_bottom(6)
+        # The one place the mark appears. The shelf itself is the product and
+        # a logo painted on it would only be in the way; this card is where
+        # you have come to look at the program rather than through it.
+        mark = logo_image(26)
+        if mark is not None:
+            head.append(mark)
         title = Gtk.Label(label="Almari settings", xalign=0)
         title.add_css_class("sw-card-title")
         title.set_hexpand(True)
@@ -3132,6 +3179,7 @@ class App(Gtk.Application):
     def make_window(self, monitor=None, primary=False):
         win = Gtk.ApplicationWindow(application=self)
         win.set_title("Almari")
+        win.set_icon_name("almari")
         shelf = Shelf(self.cfg, self.books)
         self.shelves.append(shelf)
 

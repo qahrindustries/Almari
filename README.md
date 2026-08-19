@@ -1,4 +1,8 @@
-# Almari
+<p align="center">
+  <img src="assets/logo.png" alt="Almari" width="128">
+</p>
+
+<h1 align="center">Almari</h1>
 
 A bookshelf that *is* your desktop. Almari draws a wooden bookcase on the
 Wayland background layer, stands your epub library on its shelves — spines,
@@ -42,8 +46,10 @@ cd Almari
 ```
 
 Dependencies: `gtk4`, `gtk4-layer-shell`, `python-gobject`, `python-cairo`.
-`install.sh` will fetch them with pacman on Arch; on other distributions
-install the equivalents yourself and re-run it.
+`install.sh` will fetch them with pacman on Arch if they are missing; on
+other distributions install the equivalents yourself and re-run it. It also
+installs the icon and a desktop entry, so re-running it to pick up a new
+version is safe.
 
 Then point it at your books and start it:
 

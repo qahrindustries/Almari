@@ -89,6 +89,31 @@ def on_activate(a):
         a.hide_book_card()
         check("reader has no close button", buttons_in(a.reader, []) == [])
 
+        # The mark appears once, in the settings card's header, and nowhere
+        # else: not on the shelf, not in the reader, not on the book card.
+        def images(widget, found=None):
+            found = [] if found is None else found
+            ch = widget.get_first_child()
+            while ch:
+                if isinstance(ch, Gtk.Image) and ch.get_pixel_size() > 0:
+                    found.append(ch)
+                images(ch, found)
+                ch = ch.get_next_sibling()
+            return found
+
+        check("the logo file is where the card looks for it",
+              sw.logo_path() is not None, sw.logo_path())
+        check("the logo loads", sw.logo_image(26) is not None)
+        a.show_settings()
+        check("the settings card wears the mark once",
+              len(images(a.settings_card)) == 1,
+              len(images(a.settings_card)))
+        a.dismiss_cards()
+        a.book_card.show_for(a.books[0], 10, 10, 1200, 800)
+        check("the book card does not", images(a.book_card) == [])
+        a.hide_book_card()
+        check("the reader does not", images(a.reader) == [])
+
         # Running the command again activates this instance rather than
         # starting another; it must not build a second shelf on top of the
         # first.
