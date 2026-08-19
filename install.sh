@@ -54,14 +54,11 @@ install -m755 "$here/almari.py" "$bin/almari"
 # launcher shows, and the entry that points at both.
 install -m644 "$here/assets/logo.png" "$data/almari/logo.png"
 install -m644 "$here/packaging/almari.desktop" "$data/applications/almari.desktop"
-python3 - "$here/assets/logo.png" "$data/icons/hicolor/256x256/apps/almari.png" <<'SCALE'
-import sys
-import gi
-gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import GdkPixbuf
-src, dst = sys.argv[1], sys.argv[2]
-GdkPixbuf.Pixbuf.new_from_file_at_scale(src, 256, 256, True).savev(dst, "png", [], [])
-SCALE
+# The 256px icon is shipped pre-scaled rather than resized here: GdkPixbuf
+# loads images in a bwrap sandbox now, which is unavailable in some of the
+# environments an install runs in -- inside a package build, most of all.
+install -m644 "$here/packaging/almari-256.png" \
+    "$data/icons/hicolor/256x256/apps/almari.png"
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -qtf "$data/icons/hicolor" 2>/dev/null || true
 fi

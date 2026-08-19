@@ -109,7 +109,7 @@ gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf, Gio, GLib, Pango, PangoCairo  # noqa
 import cairo  # noqa
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 APP_ID = "dev.umar.almari"
 CACHE = Path(GLib.get_user_cache_dir()) / "almari"
 CONF = Path(GLib.get_user_config_dir()) / "almari" / "config.json"
