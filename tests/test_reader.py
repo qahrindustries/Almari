@@ -77,23 +77,32 @@ def run(a):
 
     def measure():
         adj = reader.scroller.get_vadjustment()
-        # pick a chapter with real scrollable length
+        # The longest chapter in the book, not merely the first long one:
+        # the window is whatever size the compositor gave it, so how many
+        # screens a chapter is worth is not known until it is laid out.
+        best, span = 0, -1.0
         for ci in range(len(reader.chapters)):
             reader.show_chapter(ci)
             while GLib.MainContext.default().pending():
                 GLib.MainContext.default().iteration(False)
-            if adj.get_upper() - adj.get_page_size() > adj.get_page_size() * 5:
-                break
+            this = adj.get_upper() - adj.get_page_size()
+            if this > span:
+                best, span = ci, this
+        reader.show_chapter(best)
+        while GLib.MainContext.default().pending():
+            GLib.MainContext.default().iteration(False)
         span = adj.get_upper() - adj.get_page_size()
-        # Four page turns are measured below, and a chapter that runs out
-        # part way through rolls into the next one -- which is correct
-        # behaviour but says nothing about where a page turn lands.
-        check("chapter is long enough to page through",
-              span > adj.get_page_size() * 4, span)
+
+        # A chapter that runs out part way through rolls into the next one,
+        # which is correct behaviour but says nothing about where a page
+        # turn lands, so only the turns that stay inside the chapter count.
+        turns = min(4, int(span / max(1.0, adj.get_page_size())))
+        check("a chapter worth paging through", turns >= 2,
+              (turns, span, adj.get_page_size()))
 
         adj.set_value(0.0)
         seen_tops = []
-        for step in range(4):
+        for step in range(turns):
             before = adj.get_value()
             bottom_line = last_visible(before)
             adj.set_value(before)
