@@ -176,6 +176,7 @@ snippets under `modules/` into `Config.qml` and the background settings page.
 ```sh
 python3 tests/test_shelf.py          # layout, tilt, hit-testing, drop targets
 python3 tests/test_interaction.py    # click/double-click/drag, cards, state
+python3 tests/test_wiring.py         # gestures and overlays, in a real window
 python3 tests/test_reader.py BOOK.epub   # paging exactness, needs a real epub
 ```
 
